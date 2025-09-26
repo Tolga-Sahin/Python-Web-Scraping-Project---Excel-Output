@@ -7,15 +7,11 @@ import requests
 import pandas as pd
 import time
 import sys
-import os
 from urllib.parse import quote_plus
-from dotenv import load_dotenv
 
-# --- API Key ---
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
+API_KEY = ""  # Buraya kendi API key'inizi local olarak ekleyin
 
-OUTPUT_FILE = "ankara_otomotiv.xlsx"
+OUTPUT_FILE = "ankara_anaokulu.xlsx"
 
 ILCELER = [
     "Akyurt","Altındağ","Ayaş","Bala","Beypazarı","Çamlıdere","Çankaya",
@@ -25,22 +21,20 @@ ILCELER = [
 ]
 
 KATEGORILER = [
-    "otomotiv",
-    "oto servis",
-    "araç kiralama",
-    "oto galeri",
-    "benzin istasyonu",
-    "lastik",
-    "oto yedek parça"
+  "kreş",
+  "anaokulu",
+  "0-3 yaş",
+  "3-6 yaş",
+  "6+ yaş",
+  "yaz okulu",
 ]
 
-# Limits
-PAGE_TOKEN_WAIT = 2.5
-REQUEST_DELAY = 0.15
-SAVE_EVERY = 100
+PAGE_TOKEN_WAIT = 2.5  
+REQUEST_DELAY = 0.15   
+SAVE_EVERY = 100        
 
 if not API_KEY:
-    print("Hata: GOOGLE_API_KEY bulunamadı. Lütfen .env dosyasında ayarlayın.")
+    print("Hata: API_KEY boş. Lütfen kendi Google API anahtarınızı ekleyin.")
     sys.exit(1)
 
 session = requests.Session()
@@ -48,6 +42,7 @@ seen_place_ids = set()
 results = []
 
 def safe_get(url, params=None, max_retries=5, backoff=1.0):
+    """Basit retry + backoff wrapper."""
     for i in range(max_retries):
         try:
             r = session.get(url, params=params, timeout=15)
@@ -60,6 +55,7 @@ def safe_get(url, params=None, max_retries=5, backoff=1.0):
     return None
 
 def process_textsearch(query):
+    """Text Search ile tüm sayfaları çek, her place için detay al."""
     base = "https://maps.googleapis.com/maps/api/place/textsearch/json"
     params = {"query": query, "key": API_KEY}
     url = base
@@ -73,6 +69,7 @@ def process_textsearch(query):
             pid = place.get("place_id")
             if not pid or pid in seen_place_ids:
                 continue
+
             details_url = "https://maps.googleapis.com/maps/api/place/details/json"
             dparams = {
                 "place_id": pid,
@@ -103,7 +100,6 @@ def process_textsearch(query):
             time.sleep(PAGE_TOKEN_WAIT)
             params = {"pagetoken": token, "key": API_KEY}
             url = base
-            continue
         else:
             break
 
@@ -111,9 +107,9 @@ def save_progress():
     df = pd.DataFrame(results)
     df = df.drop_duplicates(subset=["PlaceID"])
     df.to_excel(OUTPUT_FILE, index=False)
-    print(f"Kayıt kaydedildi → {OUTPUT_FILE} (toplam: {len(df)})")
+    print(f"Kayıt kaydedildi → {OUTPUT_FILE} (toplam kayıt: {len(df)})")
 
-# Çalıştırma
+
 try:
     total_queries = len(ILCELER) * len(KATEGORILER)
     qcount = 0
