@@ -1,4 +1,4 @@
 requests
 pandas
-time
-sys
+openpyxl
+python-dotenv
