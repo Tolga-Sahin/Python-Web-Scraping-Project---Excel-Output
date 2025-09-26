@@ -7,13 +7,9 @@ import requests
 import pandas as pd
 import time
 import sys
-import os
 from urllib.parse import quote_plus
-from dotenv import load_dotenv
 
-# --- API Key ---
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
+API_KEY = ""  # Buraya kendi key'inizi ekleyin local olarak çalıştırmak için
 
 OUTPUT_FILE = "ankara_otomotiv.xlsx"
 
@@ -34,13 +30,13 @@ KATEGORILER = [
     "oto yedek parça"
 ]
 
-# Limits
+
 PAGE_TOKEN_WAIT = 2.5
 REQUEST_DELAY = 0.15
 SAVE_EVERY = 100
 
 if not API_KEY:
-    print("Hata: GOOGLE_API_KEY bulunamadı. Lütfen .env dosyasında ayarlayın.")
+    print("Hata: API_KEY boş. Lütfen kendi Google API anahtarınızı ekleyin.")
     sys.exit(1)
 
 session = requests.Session()
@@ -113,7 +109,7 @@ def save_progress():
     df.to_excel(OUTPUT_FILE, index=False)
     print(f"Kayıt kaydedildi → {OUTPUT_FILE} (toplam: {len(df)})")
 
-# Çalıştırma
+
 try:
     total_queries = len(ILCELER) * len(KATEGORILER)
     qcount = 0
