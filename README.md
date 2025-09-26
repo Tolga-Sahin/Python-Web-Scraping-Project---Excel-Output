@@ -11,4 +11,7 @@ Python ile Ankara’daki otomotiv ve anaokulu firmalarının verilerini çekip E
 
 ## Kurulum
 1. Python 3 yüklü olmalı
-2. Gerekli paketleri yükle
+2. Gerekli paketleri yükle:requests,pandas,time,sys
+
+
+
