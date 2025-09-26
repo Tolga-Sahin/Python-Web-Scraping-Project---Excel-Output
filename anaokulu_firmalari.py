@@ -1,26 +1,21 @@
 """
-Ankara'daki 25 ilçeyi tek tek tarayan, belirlenen kategoriler
-için Google Places Text Search ile tüm sayfaları (pagetoken)
-gezen ve Place Details ile:
-  - Firma Adı
-  - Adres
-  - Telefon
-  - Web Sitesi
-  - Konum (lat,lng)
-çekip Excel'e kaydeden script.
-
+Ankara'daki ilçeleri tarayan, belirlenen kategoriler
+için Google Places API ile firma bilgilerini çekip Excel’e kaydeden script.
 """
 
 import requests
 import pandas as pd
 import time
 import sys
+import os
 from urllib.parse import quote_plus
+from dotenv import load_dotenv
 
+# --- API Key ---
+load_dotenv()
+API_KEY = os.getenv("GOOGLE_API_KEY")
 
-API_KEY = "XXXXXXXXXXXXXXXXXXXXX"
-OUTPUT_FILE = "ankara_tum_ilceler_kategorili.xlsx"
-
+OUTPUT_FILE = "ankara_otomotiv.xlsx"
 
 ILCELER = [
     "Akyurt","Altındağ","Ayaş","Bala","Beypazarı","Çamlıdere","Çankaya",
@@ -30,22 +25,22 @@ ILCELER = [
 ]
 
 KATEGORILER = [
-  "kreş",
-  "anaokulu",
-  "0-3 yaş",
-  "3-6 yaş",
-  "6+ yaş",
-  "yaz okulu",
+    "otomotiv",
+    "oto servis",
+    "araç kiralama",
+    "oto galeri",
+    "benzin istasyonu",
+    "lastik",
+    "oto yedek parça"
 ]
 
+# Limits
+PAGE_TOKEN_WAIT = 2.5
+REQUEST_DELAY = 0.15
+SAVE_EVERY = 100
 
-PAGE_TOKEN_WAIT = 2.5  
-REQUEST_DELAY = 0.15   
-SAVE_EVERY = 100        
-# ------------------------------------
-
-if API_KEY == "BURAYA_API_KEYINIZI_YAZIN":
-    print("Lütfen API_KEY değişkenine Google API anahtarınızı yazın ve tekrar çalıştırın.")
+if not API_KEY:
+    print("Hata: GOOGLE_API_KEY bulunamadı. Lütfen .env dosyasında ayarlayın.")
     sys.exit(1)
 
 session = requests.Session()
@@ -53,36 +48,31 @@ seen_place_ids = set()
 results = []
 
 def safe_get(url, params=None, max_retries=5, backoff=1.0):
-    """Basit retry + backoff wrapper."""
     for i in range(max_retries):
         try:
             r = session.get(url, params=params, timeout=15)
             if r.status_code == 200:
                 return r.json()
             else:
-               
                 time.sleep(backoff * (i+1))
-        except requests.RequestException as e:
+        except requests.RequestException:
             time.sleep(backoff * (i+1))
     return None
 
 def process_textsearch(query):
-    """Text Search ile bütün sayfaları çek, her place için detay al."""
     base = "https://maps.googleapis.com/maps/api/place/textsearch/json"
     params = {"query": query, "key": API_KEY}
     url = base
     while True:
         data = safe_get(url, params)
         if not data:
-            print("Uyarı: TextSearch isteği başarısız oldu veya zaman aşımı:", query)
+            print("Uyarı: TextSearch başarısız:", query)
             return
 
-        # results
         for place in data.get("results", []):
             pid = place.get("place_id")
             if not pid or pid in seen_place_ids:
                 continue
-            # Place Details çağrısı
             details_url = "https://maps.googleapis.com/maps/api/place/details/json"
             dparams = {
                 "place_id": pid,
@@ -91,13 +81,13 @@ def process_textsearch(query):
             }
             ddata = safe_get(details_url, dparams)
             if not ddata:
-                print("Uyarı: details isteği başarısız:", pid)
+                print("Uyarı: details başarısız:", pid)
                 continue
             detay = ddata.get("result", {})
 
             results.append({
                 "PlaceID": pid,
-                "KategoriAranan": query,  
+                "KategoriAranan": query,
                 "Firma Adı": detay.get("name"),
                 "Adres": detay.get("formatted_address"),
                 "Telefon": detay.get("formatted_phone_number"),
@@ -106,34 +96,27 @@ def process_textsearch(query):
                                     if "geometry" in detay else None)
             })
             seen_place_ids.add(pid)
-       
             time.sleep(REQUEST_DELAY)
 
-   
         token = data.get("next_page_token")
         if token:
-        
             time.sleep(PAGE_TOKEN_WAIT)
             params = {"pagetoken": token, "key": API_KEY}
-       
-            url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-       
+            url = base
             continue
         else:
             break
 
 def save_progress():
     df = pd.DataFrame(results)
-    # Tekrarlı kayıtları PlaceID ile temizle
     df = df.drop_duplicates(subset=["PlaceID"])
-    df.to_excel(r"C:\Users\Msi\Desktop\tum_ankara_otomotiv_firmalari.xlsx", index=False)
-    print(f"Geçici kayıt kaydedildi → {OUTPUT_FILE} (toplam kayıt: {len(df)})")
+    df.to_excel(OUTPUT_FILE, index=False)
+    print(f"Kayıt kaydedildi → {OUTPUT_FILE} (toplam: {len(df)})")
 
-
-total_queries = len(ILCELER) * len(KATEGORILER)
-qcount = 0
-
+# Çalıştırma
 try:
+    total_queries = len(ILCELER) * len(KATEGORILER)
+    qcount = 0
     for ilce in ILCELER:
         for kategori in KATEGORILER:
             qcount += 1
@@ -141,16 +124,14 @@ try:
             print(f"[{qcount}/{total_queries}] Aranıyor: {query}")
             process_textsearch(query)
 
-            # Ara kayıt
             if len(results) >= SAVE_EVERY and len(results) % SAVE_EVERY < 5:
                 save_progress()
 
-    # Son kaydet
     save_progress()
     print("Bitti. Toplam benzersiz kayıt:", len(seen_place_ids))
 
 except KeyboardInterrupt:
-    print("İptal edildi. Şu ana kadar toplanan veriler kaydediliyor...")
+    print("İptal edildi. Şu ana kadar veriler kaydediliyor...")
     save_progress()
 except Exception as e:
     print("Hata oluştu:", e)
