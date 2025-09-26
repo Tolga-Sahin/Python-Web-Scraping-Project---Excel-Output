@@ -14,4 +14,3 @@ Python ile Ankara’daki otomotiv ve anaokulu firmalarının verilerini çekip E
 2. Gerekli paketleri yükle: requests,pandas,time,sys
 
 
-
